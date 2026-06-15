@@ -1,0 +1,17 @@
+.git
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.coverage
+htmlcov
+.env
+.env.*
+!.env.example
+*.md
+!README.md
+# Note: specs/ is kept in the image — contract tests read specs/.../openapi.yaml.
+HANDOFF.md
+.DS_Store

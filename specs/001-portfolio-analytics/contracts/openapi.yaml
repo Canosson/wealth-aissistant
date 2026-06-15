@@ -1,0 +1,271 @@
+openapi: 3.1.0
+info:
+  title: Wealth AIssistant — Portfolio Tracking & Analytics API
+  version: 0.1.0
+  description: >
+    REST contract between the Streamlit UI and the FastAPI backend for feature
+    001-portfolio-analytics. Read-only with respect to external financial data
+    (no money movement / trading). All money values are exact decimals expressed
+    as strings, each accompanied by an ISO-4217 currency. All /portfolio and
+    /connections endpoints require a bearer session token and are scoped to the
+    authenticated investor.
+
+servers:
+  - url: http://localhost:8000
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/register:
+    post:
+      summary: Create an investor account
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/AuthResponse' } } } }
+        '409': { description: Email already registered, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /auth/login:
+    post:
+      summary: Authenticate and receive a session token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/AuthResponse' } } } }
+        '401': { description: Invalid credentials, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /connections/link-token:
+    post:
+      summary: Begin account linking (returns a provider link token)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/LinkToken' } } } }
+
+  /connections:
+    get:
+      summary: List the investor's linked account connections
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Connection' } } } } }
+    post:
+      summary: Complete linking by exchanging the provider public token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExchangeRequest' }
+      responses:
+        '201': { description: Linked, content: { application/json: { schema: { $ref: '#/components/schemas/Connection' } } } }
+        '400': { description: Linking failed, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /connections/{id}:
+    delete:
+      summary: Unlink an account connection (purges its holdings)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Unlinked }
+        '404': { description: Not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /connections/{id}/refresh:
+    post:
+      summary: Refresh holdings for a connection from the provider
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Refreshed, content: { application/json: { schema: { $ref: '#/components/schemas/Connection' } } } }
+        '409': { description: Provider unavailable; last-known data retained, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /portfolio:
+    get:
+      summary: Consolidated, deduplicated portfolio (US1)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Portfolio' } } } }
+
+  /portfolio/allocation:
+    get:
+      summary: Allocation breakdown (US2)
+      parameters:
+        - { name: by, in: query, required: false, schema: { type: string, enum: [asset_class, sector, account], default: asset_class } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Allocation' } } } }
+
+  /portfolio/performance:
+    get:
+      summary: Period return and gain/loss (US2)
+      parameters:
+        - { name: period, in: query, required: false, schema: { type: string, enum: [1M, 3M, 6M, 1Y, YTD, ALL], default: 1M } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Performance' } } } }
+
+  /me/export:
+    get:
+      summary: Export all investor data as JSON (FR-017)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/InvestorExport' } } } }
+
+  /me:
+    delete:
+      summary: Delete investor account and erase all data (FR-018, SC-009)
+      responses:
+        '204': { description: Account and all data deleted }
+
+  /portfolio/risk:
+    get:
+      summary: Risk & diversification insights (US3)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Risk' } } } }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+
+  schemas:
+    Money:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount: { type: string, description: "Exact decimal as string, e.g. \"1234.56\"" }
+        currency: { type: string, minLength: 3, maxLength: 3, description: ISO-4217 }
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        correlation_id: { type: string }
+
+    InvestorExport:
+      type: object
+      required: [investor_id, email, reporting_currency, created_at]
+      properties:
+        investor_id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        reporting_currency: { type: string }
+        created_at: { type: string, format: date-time }
+        data: { type: object, description: "All associated data as nested JSON" }
+
+    RegisterRequest:
+      type: object
+      required: [email, password, reporting_currency]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 12 }
+        reporting_currency: { type: string, minLength: 3, maxLength: 3 }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+
+    AuthResponse:
+      type: object
+      required: [token, investor_id]
+      properties:
+        token: { type: string }
+        investor_id: { type: string, format: uuid }
+
+    LinkToken:
+      type: object
+      required: [link_token]
+      properties:
+        link_token: { type: string }
+
+    ExchangeRequest:
+      type: object
+      required: [public_token]
+      properties:
+        public_token: { type: string }
+
+    Connection:
+      type: object
+      required: [id, provider, institution_name, status]
+      properties:
+        id: { type: string, format: uuid }
+        provider: { type: string }
+        institution_name: { type: string }
+        status: { type: string, enum: [pending, active, needs_reauth, error, unlinked] }
+        last_synced_at: { type: [string, "null"], format: date-time }
+        error_detail: { type: [string, "null"] }
+
+    Holding:
+      type: object
+      required: [security_id, name, asset_class, quantity, price_available]
+      properties:
+        security_id: { type: string, format: uuid }
+        symbol: { type: [string, "null"] }
+        name: { type: string }
+        asset_class: { type: string }
+        sector: { type: [string, "null"] }
+        quantity: { type: string, description: exact decimal }
+        value: { $ref: '#/components/schemas/Money' }
+        price_available: { type: boolean, description: false → value omitted, excluded from total }
+        accounts: { type: array, items: { type: string }, description: account names holding this security }
+
+    Portfolio:
+      type: object
+      required: [total_value, holdings, last_updated, reporting_currency]
+      properties:
+        reporting_currency: { type: string }
+        total_value: { $ref: '#/components/schemas/Money' }
+        last_updated: { type: [string, "null"], format: date-time }
+        stale: { type: boolean }
+        holdings: { type: array, items: { $ref: '#/components/schemas/Holding' } }
+
+    AllocationSlice:
+      type: object
+      required: [label, weight_pct, value]
+      properties:
+        label: { type: string, description: "asset class / sector / account; null grouped as Unclassified" }
+        weight_pct: { type: string, description: "decimal percent; slices sum to 100" }
+        value: { $ref: '#/components/schemas/Money' }
+
+    Allocation:
+      type: object
+      required: [by, slices]
+      properties:
+        by: { type: string, enum: [asset_class, sector, account] }
+        slices: { type: array, items: { $ref: '#/components/schemas/AllocationSlice' } }
+
+    Performance:
+      type: object
+      required: [period, return_pct, gain_loss, start_value, end_value]
+      properties:
+        period: { type: string }
+        return_pct: { type: string, description: decimal percent }
+        gain_loss: { $ref: '#/components/schemas/Money' }
+        start_value: { $ref: '#/components/schemas/Money' }
+        end_value: { $ref: '#/components/schemas/Money' }
+        insufficient_history: { type: boolean }
+
+    Risk:
+      type: object
+      required: [concentration, hhi, diversification]
+      properties:
+        concentration:
+          type: array
+          items:
+            type: object
+            properties:
+              security_id: { type: string, format: uuid }
+              name: { type: string }
+              weight_pct: { type: string }
+              flagged: { type: boolean, description: weight ≥ configured threshold }
+        hhi: { type: string, description: "Herfindahl-Hirschman Index of weights" }
+        annualized_volatility_pct: { type: [string, "null"], description: null when insufficient history }
+        diversification:
+          type: object
+          properties:
+            asset_class_count: { type: integer }
+            sector_count: { type: integer }
+            summary: { type: string, description: plain-language explanation }

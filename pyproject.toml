@@ -1,0 +1,93 @@
+[project]
+name = "wealth-aissistent"
+version = "0.1.0"
+description = "Wealth AI assistant — portfolio tracking & analytics"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    # Backend API
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    # Persistence
+    "sqlalchemy>=2.0",
+    "alembic>=1.14",
+    "psycopg[binary]>=3.2",
+    # Analytics
+    "pandas>=2.2",
+    "numpy>=2.1",
+    # UI
+    "streamlit>=1.40",
+    # MCP
+    "mcp>=1.0",
+    # Auth
+    "argon2-cffi>=23.1",
+    "pyjwt>=2.10",
+    # HTTP client (provider calls)
+    "httpx>=0.28",
+    # Logging
+    "structlog>=24.4",
+    # Scheduling
+    "apscheduler>=3.10",
+    # Account aggregation (Plaid sandbox)
+    "plaid-python>=28.0",
+    # YAML (OpenAPI contract validation)
+    "pyyaml>=6.0",
+    # Encryption-at-rest (AES-256-GCM)
+    "cryptography>=43.0",
+    # Required by SQLAlchemy async engine on Python 3.14
+    "greenlet>=3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "pytest-asyncio>=0.24",
+    "respx>=0.21",
+    "httpx>=0.28",
+    "ruff>=0.8",
+    "aiosqlite>=0.20",
+    "email-validator>=2.2",
+    "jsonschema>=4.23",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wealth_assistant"]
+
+# ── Ruff ──────────────────────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "S", "ANN"]
+ignore = [
+    "ANN101",  # missing self annotation
+    "ANN102",  # missing cls annotation
+    "S101",    # assert statements fine in tests
+]
+per-file-ignores = { "tests/**" = ["S101", "ANN"] }
+
+[tool.ruff.lint.isort]
+known-first-party = ["wealth_assistant"]
+
+# ── Pytest ────────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "--strict-markers -q"
+
+# ── Coverage ──────────────────────────────────────────────────────────────────
+[tool.coverage.run]
+source = ["src/wealth_assistant"]
+omit = ["*/ui/*"]  # Streamlit UI excluded from coverage gate
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true

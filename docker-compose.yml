@@ -1,0 +1,69 @@
+# Local dev/test stack: Postgres + app.
+#
+#   docker compose up db -d                      # just Postgres
+#   docker compose run --rm migrate              # apply Alembic migrations
+#   docker compose up app                        # serve the API on :8000
+#   docker compose run --rm test                 # run the suite against real Postgres
+#
+# Config comes from .env (copy .env.example -> .env). Postgres credentials below
+# default to dev-only values; override via .env for anything non-local.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-wealth}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wealth}
+      POSTGRES_DB: ${POSTGRES_DB:-wealth}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Creates the isolated test database on first boot (see scripts/initdb).
+      - ./scripts/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wealth} -d ${POSTGRES_DB:-wealth}"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+
+  # One-shot: bring the schema up to head against the running db.
+  migrate:
+    build: .
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-wealth}:${POSTGRES_PASSWORD:-wealth}@db:5432/${POSTGRES_DB:-wealth}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-wealth}:${POSTGRES_PASSWORD:-wealth}@db:5432/${POSTGRES_DB:-wealth}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (>=32 bytes)}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env (base64 32-byte key)}
+      AGGREGATION_PROVIDER: ${AGGREGATION_PROVIDER:-fake}
+      SNAPSHOT_JOB_ENABLED: ${SNAPSHOT_JOB_ENABLED:-false}
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # One-shot: run the full pytest suite against the real Postgres service.
+  test:
+    build: .
+    command: ["pytest"]
+    environment:
+      # conftest reads TEST_DATABASE_URL; isolated db so it can create/drop schema.
+      TEST_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-wealth}:${POSTGRES_PASSWORD:-wealth}@db:5432/${POSTGRES_TEST_DB:-wealth_test}
+      _ALLOW_MISSING_ENCRYPTION_KEY: "1"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
