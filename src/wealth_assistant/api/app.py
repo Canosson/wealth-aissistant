@@ -3,8 +3,12 @@ from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from wealth_assistant.api import routes_auth
+from wealth_assistant.api.limiter import limiter
 from wealth_assistant.observability import CorrelationIdMiddleware, configure_logging
 
 
@@ -17,6 +21,10 @@ def create_app() -> FastAPI:
         version="0.1.0",
         description="Portfolio tracking & analytics",
     )
+
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.add_middleware(SlowAPIMiddleware)
 
     app.add_middleware(CorrelationIdMiddleware)
 

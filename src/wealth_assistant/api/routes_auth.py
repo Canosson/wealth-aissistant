@@ -1,9 +1,10 @@
 """Auth routes: POST /auth/register and POST /auth/login (T019)."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 
 from wealth_assistant.api.deps import SessionDep
+from wealth_assistant.api.limiter import limiter
 from wealth_assistant.api.schemas import AuthResponse, LoginRequest, RegisterRequest
 from wealth_assistant.domain.errors import ConflictError, ValidationError
 from wealth_assistant.services.auth_service import AuthService
@@ -12,7 +13,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
-async def register(body: RegisterRequest, session: SessionDep) -> AuthResponse:
+@limiter.limit("5/minute")
+async def register(request: Request, body: RegisterRequest, session: SessionDep) -> AuthResponse:
     try:
         investor, token = await AuthService(session).register(
             email=str(body.email),
@@ -28,7 +30,8 @@ async def register(body: RegisterRequest, session: SessionDep) -> AuthResponse:
 
 
 @router.post("/login", response_model=AuthResponse)
-async def login(body: LoginRequest, session: SessionDep) -> AuthResponse:
+@limiter.limit("5/minute")
+async def login(request: Request, body: LoginRequest, session: SessionDep) -> AuthResponse:
     try:
         investor, token = await AuthService(session).login(
             email=str(body.email),

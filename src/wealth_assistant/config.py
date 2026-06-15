@@ -3,8 +3,11 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field, PostgresDsn, SecretStr
+from pydantic import Field, PostgresDsn, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# HS256 tokens are only as strong as the signing key; require at least 32 bytes.
+MIN_JWT_SECRET_BYTES = 32
 
 
 class Settings(BaseSettings):
@@ -34,11 +37,20 @@ class Settings(BaseSettings):
 
     # Auth
     jwt_secret: SecretStr = Field(
-        default=SecretStr("change-me-in-production"),
-        description="Secret key for signing JWTs — MUST be overridden in production",
+        description="Secret key for signing JWTs (>=32 bytes) — set via JWT_SECRET",
     )
     jwt_algorithm: str = Field(default="HS256")
     jwt_expire_minutes: int = Field(default=60 * 8)  # 8 hours
+
+    @field_validator("jwt_secret")
+    @classmethod
+    def _require_strong_jwt_secret(cls, v: SecretStr) -> SecretStr:
+        secret_len = len(v.get_secret_value().encode("utf-8"))
+        if secret_len < MIN_JWT_SECRET_BYTES:
+            raise ValueError(
+                f"JWT_SECRET must be at least {MIN_JWT_SECRET_BYTES} bytes (got {secret_len})."
+            )
+        return v
 
     # Encryption-at-rest (AES-256 key, base64-encoded, 32 bytes decoded)
     encryption_key: SecretStr | None = Field(

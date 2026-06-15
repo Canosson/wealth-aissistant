@@ -14,6 +14,18 @@ from wealth_assistant.persistence.db import Base
 # Allow crypto to work in tests without a real 32-byte AES key
 os.environ.setdefault("_ALLOW_MISSING_ENCRYPTION_KEY", "1")
 
+# JWT_SECRET is required and must be >=32 bytes (config.MIN_JWT_SECRET_BYTES).
+os.environ.setdefault("JWT_SECRET", "test-only-jwt-secret-not-for-production-0000")
+
+# Force the fake provider so tests never make real Plaid API calls, even when the
+# local .env has AGGREGATION_PROVIDER=plaid (e.g. after adding sandbox creds).
+os.environ.setdefault("AGGREGATION_PROVIDER", "fake")
+
+# Clear the lru_cache so any settings loaded before this point are discarded.
+from wealth_assistant.config import get_settings  # noqa: E402
+
+get_settings.cache_clear()
+
 # Default to in-memory SQLite (offline, fast). Set TEST_DATABASE_URL to point the
 # suite at a real engine, e.g. the docker-compose Postgres:
 #   postgresql+psycopg://wealth:wealth@localhost:5432/wealth_test
@@ -60,6 +72,10 @@ async def auth_client(db_engine):
     """ASGI test client backed by an isolated in-memory SQLite database."""
     from wealth_assistant.api import deps
     from wealth_assistant.api.app import create_app
+    from wealth_assistant.api.limiter import limiter
+
+    # Reset rate-limit counters so each test starts with a clean slate.
+    limiter._storage.reset()
 
     factory = async_sessionmaker(db_engine, expire_on_commit=False, autoflush=False)
     app = create_app()

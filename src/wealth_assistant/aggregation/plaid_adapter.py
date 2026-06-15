@@ -31,8 +31,8 @@ from wealth_assistant.config import get_settings
 
 _ENV_MAP = {
     "sandbox": plaid.Environment.Sandbox,
-    "development": plaid.Environment.Development,
     "production": plaid.Environment.Production,
+    # "development" was removed in plaid-python 40.0.0; unknown keys fall back to Sandbox via .get() default
 }
 
 

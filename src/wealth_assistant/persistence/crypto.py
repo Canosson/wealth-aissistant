@@ -17,12 +17,19 @@ _SEPARATOR = b":"
 _TEST_KEY: bytes | None = None  # cached for test round-trips
 
 
+def _in_test_env() -> bool:
+    """Return True only when running under pytest. Prevents the bypass from working in prod."""
+    import sys  # noqa: PLC0415
+
+    return "pytest" in sys.modules
+
+
 def _load_key() -> bytes:
     global _TEST_KEY
     raw = os.environ.get("ENCRYPTION_KEY")
     if raw:
         return base64.b64decode(raw)
-    if os.environ.get("_ALLOW_MISSING_ENCRYPTION_KEY") == "1":
+    if os.environ.get("_ALLOW_MISSING_ENCRYPTION_KEY") == "1" and _in_test_env():
         if _TEST_KEY is None:
             _TEST_KEY = secrets.token_bytes(32)
         return _TEST_KEY

@@ -34,6 +34,8 @@ dependencies = [
     "plaid-python>=28.0",
     # YAML (OpenAPI contract validation)
     "pyyaml>=6.0",
+    # Rate limiting (auth endpoints)
+    "slowapi>=0.1.9",
     # Encryption-at-rest (AES-256-GCM)
     "cryptography>=43.0",
     # Required by SQLAlchemy async engine on Python 3.14
