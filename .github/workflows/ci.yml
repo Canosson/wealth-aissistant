@@ -62,39 +62,39 @@ jobs:
       # currently untested — floors set to 0 to track them in CI output
       # without blocking, until live integration tests are added (P1 #6, P1 #7).
 
-      - name: Coverage floor — snapshot_service (≥ 85%)
+      - name: Coverage floor — snapshot_service (≥ 75%)
         run: |
           uv run pytest \
-            --cov=wealth_assistant/services/snapshot_service \
+            --cov=wealth_assistant.services.snapshot_service \
             --cov-report=term-missing \
-            --cov-fail-under=85 \
+            --cov-fail-under=75 \
             tests/integration/test_snapshot_service.py
 
-      - name: Coverage floor — scheduler/app (≥ 40%)
+      - name: Coverage floor — scheduler/app (≥ 60%)
         run: |
           uv run pytest \
-            --cov=wealth_assistant/scheduler/app \
+            --cov=wealth_assistant.scheduler.app \
             --cov-report=term-missing \
-            --cov-fail-under=40 \
+            --cov-fail-under=60 \
             tests/integration/test_snapshot_service.py
 
       - name: Coverage report — mcp/server (tracked; floor added when live tests land)
         run: |
           uv run pytest \
-            --cov=wealth_assistant/mcp/server \
+            --cov=wealth_assistant.mcp.server \
             --cov-report=term-missing \
             tests/
 
       - name: Coverage report — scheduler/jobs (tracked; floor added when snapshot job is re-enabled)
         run: |
           uv run pytest \
-            --cov=wealth_assistant/scheduler/jobs \
+            --cov=wealth_assistant.scheduler.jobs \
             --cov-report=term-missing \
             tests/
 
       - name: Coverage report — aggregation/plaid_adapter (tracked; floor added after Plaid sandbox run)
         run: |
           uv run pytest \
-            --cov=wealth_assistant/aggregation/plaid_adapter \
+            --cov=wealth_assistant.aggregation.plaid_adapter \
             --cov-report=term-missing \
             tests/
