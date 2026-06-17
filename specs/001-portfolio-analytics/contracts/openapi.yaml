@@ -263,6 +263,7 @@ components:
               flagged: { type: boolean, description: weight ≥ configured threshold }
         hhi: { type: string, description: "Herfindahl-Hirschman Index of weights" }
         annualized_volatility_pct: { type: [string, "null"], description: null when insufficient history }
+        insufficient_history: { type: boolean }
         diversification:
           type: object
           properties:

@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: wealth_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/wealth_test
+      JWT_SECRET: ci-only-jwt-secret-not-for-production-0000
+      _ALLOW_MISSING_ENCRYPTION_KEY: "1"
+      AGGREGATION_PROVIDER: fake
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv + Python 3.14
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run Alembic migrations
+        run: uv run alembic upgrade head
+
+      - name: Ruff lint
+        run: uv run ruff check src/ tests/
+
+      - name: Pytest — overall coverage gate (≥ 80%)
+        run: |
+          uv run pytest \
+            --cov=wealth_assistant \
+            --cov-report=term-missing \
+            --cov-fail-under=80
+
+      # Per-module floors for production-path modules that had 0% before.
+      # snapshot_service and scheduler/app have real tests; raise these floors
+      # as coverage improves. mcp/server, scheduler/jobs, plaid_adapter are
+      # currently untested — floors set to 0 to track them in CI output
+      # without blocking, until live integration tests are added (P1 #6, P1 #7).
+
+      - name: Coverage floor — snapshot_service (≥ 85%)
+        run: |
+          uv run pytest \
+            --cov=wealth_assistant/services/snapshot_service \
+            --cov-report=term-missing \
+            --cov-fail-under=85 \
+            tests/integration/test_snapshot_service.py
+
+      - name: Coverage floor — scheduler/app (≥ 40%)
+        run: |
+          uv run pytest \
+            --cov=wealth_assistant/scheduler/app \
+            --cov-report=term-missing \
+            --cov-fail-under=40 \
+            tests/integration/test_snapshot_service.py
+
+      - name: Coverage report — mcp/server (tracked; floor added when live tests land)
+        run: |
+          uv run pytest \
+            --cov=wealth_assistant/mcp/server \
+            --cov-report=term-missing \
+            tests/
+
+      - name: Coverage report — scheduler/jobs (tracked; floor added when snapshot job is re-enabled)
+        run: |
+          uv run pytest \
+            --cov=wealth_assistant/scheduler/jobs \
+            --cov-report=term-missing \
+            tests/
+
+      - name: Coverage report — aggregation/plaid_adapter (tracked; floor added after Plaid sandbox run)
+        run: |
+          uv run pytest \
+            --cov=wealth_assistant/aggregation/plaid_adapter \
+            --cov-report=term-missing \
+            tests/
